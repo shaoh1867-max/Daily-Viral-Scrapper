@@ -215,6 +215,33 @@ def run_apify_scrape(since_date, results_limit: int, newer_than: str) -> list[di
 
 
 # ── History helpers ───────────────────────────────────────────────────────────
+def fetch_netlify_history() -> list[dict]:
+    """Download reels_history.json from the live Netlify site.
+    Used by GitHub Actions where the file is not in the repo.
+    Returns [] on any failure so the run still continues cleanly.
+    """
+    if not NETLIFY_TOKEN or not NETLIFY_SITE_ID:
+        return []
+    try:
+        site_resp = requests.get(
+            f"https://api.netlify.com/api/v1/sites/{NETLIFY_SITE_ID}",
+            headers={"Authorization": f"Bearer {NETLIFY_TOKEN}"},
+            timeout=30,
+        )
+        site_resp.raise_for_status()
+        site_url = site_resp.json().get("ssl_url") or site_resp.json().get("url", "")
+        if not site_url:
+            return []
+        hist_resp = requests.get(f"{site_url}/reels_history.json", timeout=30)
+        hist_resp.raise_for_status()
+        data = hist_resp.json()
+        print(f"  Fetched {len(data)} day(s) of history from Netlify.")
+        return data if isinstance(data, list) else []
+    except Exception as e:
+        print(f"  [WARN] Could not fetch history from Netlify: {e}")
+        return []
+
+
 def load_history() -> list[dict]:
     if os.path.exists(HISTORY_FILE):
         with open(HISTORY_FILE, "r", encoding="utf-8") as f:
@@ -222,7 +249,9 @@ def load_history() -> list[dict]:
                 return json.load(f)
             except json.JSONDecodeError:
                 return []
-    return []
+    # File missing (e.g. GitHub Actions) — pull from live Netlify site
+    print("  No local reels_history.json — fetching from Netlify...")
+    return fetch_netlify_history()
 
 
 def save_history(history: list[dict]) -> None:
