@@ -3,7 +3,7 @@ name: Daily Reels Scraper
 on:
   schedule:
     - cron: "0 20 * * *"  # 8pm UTC = 8am NZT (UTC+12)
-  workflow_dispatch:        # manually triggerable from the Actions tab
+  workflow_dispatch:
     inputs:
       mode:
         description: "Scrape mode"
@@ -14,13 +14,18 @@ on:
           - normal
           - backfill
 
+permissions:
+  contents: write
+
 jobs:
   scrape:
     runs-on: ubuntu-latest
 
     steps:
-      - name: Checkout repo
+      - name: Checkout main branch
         uses: actions/checkout@v4
+        with:
+          ref: main
 
       - name: Set up Python 3.11
         uses: actions/setup-python@v5
@@ -30,14 +35,34 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
+      - name: Restore history from gh-pages
+        run: |
+          git fetch origin gh-pages 2>/dev/null || true
+          git show origin/gh-pages:reels_history.json > reels_history.json 2>/dev/null \
+            && echo "Restored existing history from gh-pages." \
+            || echo "No existing history found — starting fresh."
+
       - name: Run scraper
         env:
           APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
-          NETLIFY_TOKEN: ${{ secrets.NETLIFY_TOKEN }}
-          NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
         run: |
           if [ "${{ github.event.inputs.mode }}" = "backfill" ]; then
             python scrape_reels.py --backfill
           else
             python scrape_reels.py
           fi
+
+      - name: Deploy to GitHub Pages
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git fetch origin gh-pages 2>/dev/null || true
+          git checkout gh-pages 2>/dev/null || git checkout --orphan gh-pages
+
+          git checkout main -- index.html
+          cp reels_history.json reels_history.json
+
+          git add index.html reels_history.json
+          git diff --cached --quiet || git commit -m "Update reels data $(date -u +%Y-%m-%d)"
+          git push origin gh-pages

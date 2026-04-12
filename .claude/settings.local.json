@@ -33,7 +33,8 @@
       "Bash(powershell -Command ':*)",
       "Bash(powershell -Command \"Get-ScheduledTask -TaskName 'DailyViralScraper' | Select-Object TaskName, State; \\(Get-ScheduledTask -TaskName 'DailyViralScraper'\\).Triggers | Select-Object StartBoundary, RepetitionInterval; \\(Get-ScheduledTask -TaskName 'DailyViralScraper'\\).Actions | Select-Object Execute, Arguments, WorkingDirectory\")",
       "Bash(\"C:/Users/CC/AppData/Local/Python/bin/python.exe\" scrape_reels.py)",
-      "Bash(grep -v \"^$\")"
+      "Bash(grep -v \"^$\")",
+      "Bash(python -c ':*)"
     ]
   }
 }

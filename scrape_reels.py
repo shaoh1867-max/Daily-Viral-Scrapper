@@ -4,25 +4,21 @@ Instagram Reels scraper using the Apify Instagram API Scraper.
 
 Setup — add to .env in this folder:
   APIFY_TOKEN=your-apify-api-token
-  NETLIFY_SITE_ID=your-site-id
-  NETLIFY_TOKEN=your-netlify-personal-access-token
 
 Normal mode (cron):   python scrape_reels.py
-  → runs Apify scrape for today's posts, appends to reels_history.json, redeploys Netlify
+  → runs Apify scrape for today's posts, appends to reels_history.json
+  → GitHub Actions commits reels_history.json to the gh-pages branch
 
 Backfill mode (once): python scrape_reels.py --backfill
-  → runs Apify scrape for last 30 days, organises by date, merges into reels_history.json, redeploys Netlify
+  → runs Apify scrape for last 30 days, organises by date, merges into reels_history.json
 
 Dry-run mode (local): python scrape_reels.py --dry-run
   → skips all Apify API calls; loads raw items from test_data.json (if present) instead
-  → still filters, ranks, writes reels_history.json, and deploys to Netlify as normal
   → combine with --backfill for a free end-to-end test: python scrape_reels.py --backfill --dry-run
 """
 
-import hashlib
 import json
 import os
-import shutil
 import sys
 import time
 from datetime import datetime, timedelta, timezone
@@ -37,14 +33,11 @@ from dotenv import load_dotenv
 # ── Config ────────────────────────────────────────────────────────────────────
 SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
 HISTORY_FILE = os.path.join(SCRIPT_DIR, "reels_history.json")
-NETLIFY_DIR  = os.path.join(SCRIPT_DIR, "netlify-deploy")
 
 # Load .env if present (local dev). In GitHub Actions the secrets are already
 # injected as environment variables, so a missing .env file is fine.
 load_dotenv(os.path.join(SCRIPT_DIR, ".env"), override=False)
-APIFY_TOKEN   = os.getenv("APIFY_TOKEN", "")
-NETLIFY_TOKEN = os.getenv("NETLIFY_TOKEN", "")
-NETLIFY_SITE_ID = os.getenv("NETLIFY_SITE_ID", "")
+APIFY_TOKEN = os.getenv("APIFY_TOKEN", "")
 
 APIFY_ACTOR   = "apify~instagram-api-scraper"
 APIFY_BASE    = "https://api.apify.com/v2"
@@ -109,7 +102,6 @@ def wait_for_run(run_id: str) -> None:
         if status in ("FAILED", "ABORTED", "TIMED-OUT"):
             print(f"\n  [ERROR] Apify run ended with status: {status}")
             raise RuntimeError(f"Apify run failed: {status}")
-        # Log actual status each poll so hangs are visible in the logs
         print(f" [{status}]", end="", flush=True)
         if elapsed >= MAX_WAIT:
             raise RuntimeError(
@@ -215,33 +207,6 @@ def run_apify_scrape(since_date, results_limit: int, newer_than: str) -> list[di
 
 
 # ── History helpers ───────────────────────────────────────────────────────────
-def fetch_netlify_history() -> list[dict]:
-    """Download reels_history.json from the live Netlify site.
-    Used by GitHub Actions where the file is not in the repo.
-    Returns [] on any failure so the run still continues cleanly.
-    """
-    if not NETLIFY_TOKEN or not NETLIFY_SITE_ID:
-        return []
-    try:
-        site_resp = requests.get(
-            f"https://api.netlify.com/api/v1/sites/{NETLIFY_SITE_ID}",
-            headers={"Authorization": f"Bearer {NETLIFY_TOKEN}"},
-            timeout=30,
-        )
-        site_resp.raise_for_status()
-        site_url = site_resp.json().get("ssl_url") or site_resp.json().get("url", "")
-        if not site_url:
-            return []
-        hist_resp = requests.get(f"{site_url}/reels_history.json", timeout=30)
-        hist_resp.raise_for_status()
-        data = hist_resp.json()
-        print(f"  Fetched {len(data)} day(s) of history from Netlify.")
-        return data if isinstance(data, list) else []
-    except Exception as e:
-        print(f"  [WARN] Could not fetch history from Netlify: {e}")
-        return []
-
-
 def load_history() -> list[dict]:
     if os.path.exists(HISTORY_FILE):
         with open(HISTORY_FILE, "r", encoding="utf-8") as f:
@@ -249,9 +214,7 @@ def load_history() -> list[dict]:
                 return json.load(f)
             except json.JSONDecodeError:
                 return []
-    # File missing (e.g. GitHub Actions) — pull from live Netlify site
-    print("  No local reels_history.json — fetching from Netlify...")
-    return fetch_netlify_history()
+    return []
 
 
 def save_history(history: list[dict]) -> None:
@@ -293,93 +256,6 @@ def print_ranked(reels: list[dict], heading: str) -> None:
     print(f"\n{'='*80}\n")
 
 
-# ── Netlify deploy ────────────────────────────────────────────────────────────
-def _sha1(path: str) -> str:
-    """Return the hex SHA1 digest of a file — used by Netlify's file-based deploy API."""
-    h = hashlib.sha1()
-    with open(path, "rb") as f:
-        for chunk in iter(lambda: f.read(65536), b""):
-            h.update(chunk)
-    return h.hexdigest()
-
-
-def deploy_to_netlify() -> None:
-    """
-    Copy reels_history.json into netlify-deploy/, then push all files to Netlify
-    via the file-based deploy API so the live site updates automatically.
-    """
-    if not NETLIFY_TOKEN or not NETLIFY_SITE_ID:
-        print("  [SKIP] Netlify deploy — NETLIFY_TOKEN or NETLIFY_SITE_ID not set in .env")
-        return
-
-    print("\nDeploying to Netlify...")
-
-    # 1. Sync the latest reels_history.json into the deploy folder
-    shutil.copy2(HISTORY_FILE, os.path.join(NETLIFY_DIR, "reels_history.json"))
-
-    # 2. Build file manifest: { "/filename": "sha1hex", ... }
-    deploy_files = {}
-    sha1_to_path = {}
-    for filename in os.listdir(NETLIFY_DIR):
-        filepath = os.path.join(NETLIFY_DIR, filename)
-        if not os.path.isfile(filepath):
-            continue
-        digest = _sha1(filepath)
-        deploy_files[f"/{filename}"] = digest
-        sha1_to_path[digest] = filepath
-
-    headers = {"Authorization": f"Bearer {NETLIFY_TOKEN}", "Content-Type": "application/json"}
-    netlify_base = "https://api.netlify.com/api/v1"
-
-    # 3. Create the deploy — Netlify responds with which files it still needs
-    resp = requests.post(
-        f"{netlify_base}/sites/{NETLIFY_SITE_ID}/deploys",
-        headers=headers,
-        json={"files": deploy_files},
-        timeout=120,
-    )
-    resp.raise_for_status()
-    deploy = resp.json()
-    deploy_id = deploy["id"]
-    required  = deploy.get("required", [])
-    print(f"  Deploy created  : {deploy_id}  ({len(required)} file(s) to upload)")
-
-    # 4. Upload only the files Netlify says it needs (skips unchanged files)
-    upload_headers = {"Authorization": f"Bearer {NETLIFY_TOKEN}", "Content-Type": "application/octet-stream"}
-    for digest in required:
-        filepath = sha1_to_path.get(digest)
-        if not filepath:
-            print(f"  [WARN] Required digest {digest} not found locally — skipping")
-            continue
-        filename = os.path.basename(filepath)
-        with open(filepath, "rb") as fh:
-            put_resp = requests.put(
-                f"{netlify_base}/deploys/{deploy_id}/files/{filename}",
-                headers=upload_headers,
-                data=fh,
-                timeout=120,
-            )
-            put_resp.raise_for_status()
-        print(f"  Uploaded        : /{filename}")
-
-    # 5. Poll until the deploy is live
-    print("  Waiting for deploy to go live", end="", flush=True)
-    while True:
-        status_resp = requests.get(f"{netlify_base}/deploys/{deploy_id}", headers=headers, timeout=120)
-        status_resp.raise_for_status()
-        state = status_resp.json().get("state", "")
-        if state == "ready":
-            print("  live")
-            url = status_resp.json().get("deploy_ssl_url") or status_resp.json().get("deploy_url", "")
-            print(f"  Site updated    : {url}")
-            return
-        if state in ("error", "failed"):
-            print(f"\n  [ERROR] Deploy ended in state: {state}")
-            return
-        print(".", end="", flush=True)
-        time.sleep(5)
-
-
 # ── Modes ─────────────────────────────────────────────────────────────────────
 def main_normal() -> None:
     """Daily cron mode — scrape today's posts only."""
@@ -402,8 +278,6 @@ def main_normal() -> None:
     upsert_day(history, TODAY.isoformat(), reels)
     save_history(history)
     print(f"History updated         : {HISTORY_FILE}")
-
-    deploy_to_netlify()
 
 
 def main_backfill() -> None:
@@ -433,8 +307,6 @@ def main_backfill() -> None:
         upsert_day(history, date_str, day_reels)
     save_history(history)
     print(f"Backfill complete: {len(dates_found)} day(s) written to {HISTORY_FILE}")
-
-    deploy_to_netlify()
 
 
 # ── Entry point ───────────────────────────────────────────────────────────────
