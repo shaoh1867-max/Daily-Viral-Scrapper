@@ -8,6 +8,11 @@ reels_*.json
 # Local dry-run test fixture
 test_data.json
 
+# Auth / session files
+cookies.txt
+.instaloader_session
+.instaloader_user
+
 # Python
 __pycache__/
 *.pyc
