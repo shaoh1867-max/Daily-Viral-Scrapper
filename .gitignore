@@ -1,0 +1,17 @@
+# Secrets
+.env
+
+# Generated data files — rebuilt on every scraper run
+reels_history.json
+reels_*.json
+netlify-deploy/reels_history.json
+
+# Auth / session files
+cookies.txt
+.instaloader_session
+.instaloader_user
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
