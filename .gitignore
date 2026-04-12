@@ -6,6 +6,9 @@ reels_history.json
 reels_*.json
 netlify-deploy/reels_history.json
 
+# Local dry-run test fixture — not committed, create your own copy
+test_data.json
+
 # Auth / session files
 cookies.txt
 .instaloader_session

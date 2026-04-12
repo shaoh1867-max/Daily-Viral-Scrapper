@@ -8,10 +8,15 @@ Setup — add to .env in this folder:
   NETLIFY_TOKEN=your-personal-access-token
 
 Normal mode (cron):   python scrape_reels.py
-  → runs Bright Data scrape for yesterday's posts, appends to reels_history.json, redeploys Netlify
+  → runs Bright Data scrape for today's posts, appends to reels_history.json, redeploys Netlify
 
 Backfill mode (once): python scrape_reels.py --backfill
   → runs Bright Data scrape for last 30 days, organises by date, merges into reels_history.json, redeploys Netlify
+
+Dry-run mode (local): python scrape_reels.py --dry-run
+  → skips all Bright Data API calls; loads raw items from test_data.json (if present) instead
+  → still filters, ranks, writes reels_history.json, and deploys to Netlify as normal
+  → combine with --backfill for a free end-to-end test: python scrape_reels.py --backfill --dry-run
 """
 
 import hashlib
@@ -51,6 +56,7 @@ YESTERDAY     = TODAY - timedelta(days=1)
 BACKFILL_DAYS = 30
 
 BACKFILL_MODE = "--backfill" in sys.argv
+DRY_RUN       = "--dry-run"  in sys.argv
 
 
 def load_accounts() -> list[str]:
@@ -97,13 +103,22 @@ def start_snapshot(payload: list[dict]) -> str:
 
 
 def wait_for_snapshot(snapshot_id: str) -> None:
-    """Poll until the snapshot status is 'ready'."""
+    """Poll until the snapshot status is 'ready'.
+    If the API returns a list instead of a status dict, the snapshot is already
+    complete — treat it as ready immediately.
+    """
     url = f"{BRIGHTDATA_BASE}/snapshot/{snapshot_id}?format=json"
     print(f"  Waiting for Bright Data snapshot {snapshot_id}", end="", flush=True)
     while True:
         resp = requests.get(url, headers=bd_headers(), timeout=120)
         resp.raise_for_status()
-        status = resp.json().get("status", "")
+        data = resp.json()
+        # Bright Data sometimes returns the results list directly when the
+        # snapshot is already complete rather than {"status": "ready"}.
+        if isinstance(data, list):
+            print("  ready (results returned directly)")
+            return
+        status = data.get("status", "")
         if status == "ready":
             print("  ready")
             return
@@ -185,18 +200,27 @@ def run_brightdata_scrape(since_date, results_limit: int) -> list[dict]:
         for url in ACCOUNT_URLS
     ]
 
-    print(f"  Starting Bright Data scrape...")
     print(f"  Dataset        : {BRIGHTDATA_DATASET_ID}")
     print(f"  Accounts       : {len(ACCOUNT_URLS)}")
     print(f"  Posts per acct : {results_limit}")
     print(f"  Newer than     : {since_date.isoformat()}")
 
-    snapshot_id = start_snapshot(payload)
-    wait_for_snapshot(snapshot_id)
-
-    print(f"  Downloading snapshot {snapshot_id}...")
-    raw_items = fetch_snapshot(snapshot_id)
-    print(f"  Raw items returned: {len(raw_items)}")
+    if DRY_RUN:
+        test_path = os.path.join(SCRIPT_DIR, "test_data.json")
+        if os.path.exists(test_path):
+            with open(test_path, "r", encoding="utf-8") as f:
+                raw_items = json.load(f)
+            print(f"  [DRY RUN] Loaded {len(raw_items)} item(s) from test_data.json")
+        else:
+            print("  [DRY RUN] test_data.json not found — using empty dataset")
+            raw_items = []
+    else:
+        print(f"  Starting Bright Data scrape...")
+        snapshot_id = start_snapshot(payload)
+        wait_for_snapshot(snapshot_id)
+        print(f"  Downloading snapshot {snapshot_id}...")
+        raw_items = fetch_snapshot(snapshot_id)
+        print(f"  Raw items returned: {len(raw_items)}")
 
     # Normalise, filter to videos, filter to date window, exclude today
     results = []
