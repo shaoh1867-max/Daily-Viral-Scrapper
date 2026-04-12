@@ -49,7 +49,8 @@ NETLIFY_SITE_ID       = os.getenv("NETLIFY_SITE_ID", "")
 
 BRIGHTDATA_DATASET_ID = "gd_lyclm20il4r5helnj"
 BRIGHTDATA_BASE       = "https://api.brightdata.com/datasets/v3"
-POLL_INTERVAL         = 15   # seconds between snapshot-status checks
+POLL_INTERVAL         = 15        # seconds between snapshot-status checks
+MAX_WAIT              = 45 * 60   # 45 minutes — give up if snapshot never becomes ready
 
 TODAY         = datetime.now(timezone.utc).date()
 YESTERDAY     = TODAY - timedelta(days=1)
@@ -103,12 +104,13 @@ def start_snapshot(payload: list[dict]) -> str:
 
 
 def wait_for_snapshot(snapshot_id: str) -> None:
-    """Poll until the snapshot status is 'ready'.
+    """Poll until the snapshot status is 'ready', with a 45-minute hard timeout.
     If the API returns a list instead of a status dict, the snapshot is already
     complete — treat it as ready immediately.
     """
     url = f"{BRIGHTDATA_BASE}/snapshot/{snapshot_id}?format=json"
     print(f"  Waiting for Bright Data snapshot {snapshot_id}", end="", flush=True)
+    elapsed = 0
     while True:
         resp = requests.get(url, headers=bd_headers(), timeout=120)
         resp.raise_for_status()
@@ -125,8 +127,15 @@ def wait_for_snapshot(snapshot_id: str) -> None:
         if status in ("failed", "error"):
             print(f"\n  [ERROR] Snapshot ended with status: {status}")
             raise RuntimeError(f"Bright Data snapshot failed: {status}")
-        print(".", end="", flush=True)
+        # Log actual status each poll so hangs are visible in the logs
+        print(f" [{status}]", end="", flush=True)
+        if elapsed >= MAX_WAIT:
+            raise RuntimeError(
+                f"Bright Data snapshot {snapshot_id} still '{status}' after "
+                f"{elapsed // 60}m — giving up."
+            )
         time.sleep(POLL_INTERVAL)
+        elapsed += POLL_INTERVAL
 
 
 def fetch_snapshot(snapshot_id: str) -> list[dict]:
