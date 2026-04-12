@@ -1,0 +1,412 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Daily Viral Dashboard</title>
+  <style>
+    *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+    body {
+      background: #0e0e10;
+      color: #e0e0e0;
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      min-height: 100vh;
+      padding: 32px 16px 64px;
+    }
+
+    /* ── Header ── */
+    header {
+      max-width: 860px;
+      margin: 0 auto 32px;
+    }
+    header h1 {
+      font-size: 1.6rem;
+      font-weight: 700;
+      letter-spacing: -0.3px;
+      color: #fff;
+    }
+    header p {
+      margin-top: 4px;
+      font-size: 0.85rem;
+      color: #666;
+    }
+
+    /* ── Controls bar ── */
+    .controls {
+      max-width: 860px;
+      margin: 0 auto 28px;
+      display: flex;
+      align-items: center;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+    .controls label {
+      font-size: 0.82rem;
+      color: #888;
+      white-space: nowrap;
+    }
+    select#datePicker {
+      background: #1a1a1e;
+      color: #e0e0e0;
+      border: 1px solid #2e2e35;
+      border-radius: 8px;
+      padding: 8px 14px;
+      font-size: 0.9rem;
+      cursor: pointer;
+      outline: none;
+      min-width: 160px;
+    }
+    select#datePicker:focus { border-color: #5865f2; }
+
+    .badge {
+      margin-left: auto;
+      background: #1a1a1e;
+      border: 1px solid #2e2e35;
+      border-radius: 20px;
+      padding: 5px 14px;
+      font-size: 0.78rem;
+      color: #888;
+    }
+    .badge span { color: #c0c0c0; font-weight: 600; }
+
+    /* ── File picker fallback ── */
+    .file-prompt { max-width:860px; margin:24px auto; text-align:center; }
+    .file-prompt p { color:#666; margin-bottom:16px; font-size:0.95rem; }
+    .file-btn { display:inline-block; background:#1a1a1e; border:1px dashed #3a3a45;
+      border-radius:10px; padding:20px 36px; cursor:pointer;
+      transition:border-color 0.2s, background 0.2s; color:#aaa; font-size:0.9rem; }
+    .file-btn:hover { border-color:#5865f2; background:#16161c; color:#ddd; }
+    #fileInput { display:none; }
+
+    /* ── Table ── */
+    .table-wrap {
+      max-width: 860px;
+      margin: 0 auto;
+      overflow-x: auto;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      font-size: 0.88rem;
+    }
+    thead tr {
+      border-bottom: 1px solid #2a2a32;
+    }
+    thead th {
+      text-align: left;
+      padding: 10px 14px;
+      font-size: 0.73rem;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.6px;
+      color: #555;
+      white-space: nowrap;
+    }
+    thead th.num { text-align: center; width: 48px; }
+    thead th.right { text-align: right; }
+
+    tbody tr {
+      border-bottom: 1px solid #18181c;
+      transition: background 0.12s;
+    }
+    tbody tr:hover { background: #141418; }
+
+    td { padding: 13px 14px; vertical-align: middle; }
+    td.rank {
+      text-align: center;
+      font-weight: 700;
+      font-size: 0.8rem;
+      color: #444;
+      width: 48px;
+    }
+    /* Gold / silver / bronze */
+    tr:nth-child(1) td.rank { color: #f5c518; }
+    tr:nth-child(2) td.rank { color: #aaa; }
+    tr:nth-child(3) td.rank { color: #cd7f32; }
+
+    td.account {
+      font-weight: 600;
+      color: #c0c0ff;
+      white-space: nowrap;
+    }
+    td.account .acct-name {
+      cursor: pointer;
+      color: #c0c0ff;
+      text-decoration: none;
+    }
+    td.account .acct-name:hover { text-decoration: underline; color: #fff; }
+    td.account .acct-link {
+      margin-left: 6px;
+      color: #444;
+      font-size: 0.75rem;
+      text-decoration: none;
+      vertical-align: middle;
+    }
+    td.account .acct-link:hover { color: #888; }
+
+    /* ── Back button ── */
+    .back-btn {
+      background: #1a1a1e;
+      border: 1px solid #2e2e35;
+      border-radius: 8px;
+      padding: 7px 14px;
+      color: #aaa;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .back-btn:hover { border-color: #5865f2; color: #fff; }
+    .acct-heading { font-weight: 600; color: #c0c0ff; font-size: 0.95rem; }
+
+    td.title {
+      color: #d0d0d0;
+      max-width: 280px;
+    }
+    td.title span {
+      display: -webkit-box;
+      -webkit-line-clamp: 2;
+      -webkit-box-orient: vertical;
+      overflow: hidden;
+    }
+
+    td.num-cell {
+      text-align: right;
+      font-variant-numeric: tabular-nums;
+      white-space: nowrap;
+      color: #b0b0b0;
+    }
+    td.views { color: #7dd3fc; font-weight: 600; }
+
+    td.link-cell { text-align: center; width: 60px; }
+    td.link-cell a {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      width: 30px; height: 30px;
+      border-radius: 6px;
+      background: #1e1e26;
+      border: 1px solid #2e2e3a;
+      color: #888;
+      text-decoration: none;
+      font-size: 0.85rem;
+      transition: background 0.15s, color 0.15s, border-color 0.15s;
+    }
+    td.link-cell a:hover { background: #5865f2; border-color: #5865f2; color: #fff; }
+
+    /* ── Empty / error states ── */
+    .msg {
+      max-width: 860px;
+      margin: 60px auto;
+      text-align: center;
+      color: #555;
+      font-size: 0.95rem;
+    }
+    .msg strong { color: #888; }
+  </style>
+</head>
+<body>
+
+<header>
+  <h1>Daily Viral Dashboard</h1>
+  <p>Instagram Reels — ranked by view count</p>
+</header>
+
+<div class="controls" id="controls" style="display:none">
+  <label for="datePicker">Date</label>
+  <select id="datePicker"></select>
+  <div class="badge" id="totalBadge">— reels</div>
+</div>
+
+<div class="controls" id="accountControls" style="display:none">
+  <button class="back-btn" onclick="clearAccountFilter()">&#8592; All dates</button>
+  <span class="acct-heading" id="accountTitle"></span>
+  <div class="badge" id="accountBadge">— posts</div>
+</div>
+
+<div class="table-wrap" id="tableWrap"></div>
+<div class="msg" id="msg">Loading...</div>
+
+<div class="file-prompt" id="filePrompt" style="display:none">
+  <p>Or open <strong>reels_history.json</strong> manually.</p>
+  <label class="file-btn" for="fileInput">
+    &#128193; Choose reels_history.json
+  </label>
+  <input type="file" id="fileInput" accept=".json,application/json" />
+</div>
+
+<script>
+  let history = [];
+
+  /* ── helpers ── */
+  const fmt = n => (n == null || n === 0) ? "—" : Number(n).toLocaleString();
+  const esc = s => (s || "").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+
+  /* ── date view ── */
+  function renderTable(entry) {
+    const wrap = document.getElementById("tableWrap");
+    document.getElementById("totalBadge").innerHTML =
+      `<span>${entry.reels.length}</span> reel${entry.reels.length !== 1 ? "s" : ""}`;
+
+    if (!entry.reels.length) {
+      wrap.innerHTML = "";
+      document.getElementById("msg").innerHTML = "<strong>No reels found</strong> for this day.";
+      return;
+    }
+    document.getElementById("msg").innerHTML = "";
+
+    const rows = entry.reels.map((r, i) => {
+      const acct  = esc(r.ownerUsername);
+      const igUrl = `https://www.instagram.com/${encodeURIComponent(r.ownerUsername || "")}/reels/`;
+      return `
+        <tr>
+          <td class="rank">${i + 1}</td>
+          <td class="account">
+            <span class="acct-name" onclick="filterByAccount('${esc(r.ownerUsername)}')">@${acct}</span>
+            <a class="acct-link" href="${igUrl}" target="_blank" rel="noopener" title="Open profile">&#8599;</a>
+          </td>
+          <td class="title"><span>${esc(r.caption) || "<em style='color:#555'>No caption</em>"}</span></td>
+          <td class="num-cell views">${fmt(r.videoViewCount)}</td>
+          <td class="num-cell">${fmt(r.commentsCount)}</td>
+          <td class="num-cell">${fmt(r.likesCount)}</td>
+          <td class="link-cell"><a href="${r.url || "#"}" target="_blank" rel="noopener" title="Open reel">&#8599;</a></td>
+        </tr>`;
+    }).join("");
+
+    wrap.innerHTML = `
+      <table>
+        <thead><tr>
+          <th class="num">#</th>
+          <th>Account</th>
+          <th>Caption</th>
+          <th class="right">Views</th>
+          <th class="right">Comments</th>
+          <th class="right">Likes</th>
+          <th class="right">Link</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  }
+
+  /* ── account filter view ── */
+  function filterByAccount(username) {
+    const allReels = [];
+    history.forEach(entry => {
+      entry.reels.forEach(r => {
+        if ((r.ownerUsername || "") === username) allReels.push(r);
+      });
+    });
+    allReels.sort((a, b) => (b.upload_date || "").localeCompare(a.upload_date || ""));
+
+    document.getElementById("controls").style.display = "none";
+    document.getElementById("accountControls").style.display = "flex";
+    document.getElementById("accountTitle").textContent = `@${username}`;
+    document.getElementById("accountBadge").innerHTML =
+      `<span>${allReels.length}</span> post${allReels.length !== 1 ? "s" : ""}`;
+    document.getElementById("msg").innerHTML = "";
+
+    if (!allReels.length) {
+      document.getElementById("tableWrap").innerHTML = "";
+      document.getElementById("msg").innerHTML = `<strong>No posts found</strong> for @${esc(username)}.`;
+      return;
+    }
+
+    const rows = allReels.map(r => {
+      const d = r.upload_date
+        ? new Date(r.upload_date + "T00:00:00").toLocaleDateString("en-NZ",
+            { day: "numeric", month: "short", year: "numeric" })
+        : "—";
+      return `
+        <tr>
+          <td class="num-cell" style="text-align:left;color:#666;white-space:nowrap">${d}</td>
+          <td class="title"><span>${esc(r.caption) || "<em style='color:#555'>No caption</em>"}</span></td>
+          <td class="num-cell views">${fmt(r.videoViewCount)}</td>
+          <td class="num-cell">${fmt(r.commentsCount)}</td>
+          <td class="num-cell">${fmt(r.likesCount)}</td>
+          <td class="link-cell"><a href="${r.url || "#"}" target="_blank" rel="noopener" title="Open reel">&#8599;</a></td>
+        </tr>`;
+    }).join("");
+
+    document.getElementById("tableWrap").innerHTML = `
+      <table>
+        <thead><tr>
+          <th>Date Posted</th>
+          <th>Caption</th>
+          <th class="right">Views</th>
+          <th class="right">Comments</th>
+          <th class="right">Likes</th>
+          <th class="right">Link</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  }
+
+  function clearAccountFilter() {
+    document.getElementById("accountControls").style.display = "none";
+    document.getElementById("controls").style.display = "flex";
+    const picker = document.getElementById("datePicker");
+    const entry = history.find(h => h.date === picker.value);
+    if (entry) renderTable(entry);
+  }
+
+  function populatePicker(historyData) {
+    const picker = document.getElementById("datePicker");
+    picker.innerHTML = "";
+    historyData.forEach(entry => {
+      const opt = document.createElement("option");
+      opt.value = entry.date;
+      const d = new Date(entry.date + "T00:00:00");
+      opt.textContent = d.toLocaleDateString("en-NZ", {
+        weekday: "short", day: "numeric", month: "short", year: "numeric"
+      });
+      picker.appendChild(opt);
+    });
+  }
+
+  function loadHistory(data) {
+    history = Array.isArray(data) ? data : [];
+    if (!history.length) {
+      document.getElementById("msg").textContent = "No entries found in reels_history.json.";
+      return;
+    }
+    history.sort((a, b) => b.date.localeCompare(a.date));
+    populatePicker(history);
+    document.getElementById("controls").style.display = "flex";
+    document.getElementById("msg").innerHTML = "";
+    renderTable(history[0]);
+  }
+
+  /* ── date picker change ── */
+  document.getElementById("datePicker").addEventListener("change", e => {
+    const entry = history.find(h => h.date === e.target.value);
+    if (entry) renderTable(entry);
+  });
+
+  /* ── file picker fallback (used when fetch fails on file:// protocol) ── */
+  document.getElementById("fileInput").addEventListener("change", e => {
+    const file = e.target.files[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = ev => {
+      try {
+        loadHistory(JSON.parse(ev.target.result));
+        document.getElementById("filePrompt").style.display = "none";
+      } catch {
+        document.getElementById("msg").textContent = "Could not parse JSON file.";
+      }
+    };
+    reader.readAsText(file);
+  });
+
+  /* ── fetch reels_history.json (Netlify + local server) ── */
+  /* ── falls back to file picker when opened via file://   ── */
+  fetch("reels_history.json")
+    .then(r => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+    .then(loadHistory)
+    .catch(() => {
+      document.getElementById("msg").innerHTML = "";
+      document.getElementById("filePrompt").style.display = "block";
+    });
+</script>
+</body>
+</html>

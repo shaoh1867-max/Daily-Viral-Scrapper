@@ -1,0 +1,44 @@
+# Instagram accounts to scrape
+# One username per line. Blank lines and lines starting with # are ignored.
+
+# Group 1 — Health & Wellness
+herbal.health.tips
+camillerochester
+wellness.jada
+officialholistichub
+men_healthsecrets
+wellnessmaddie1
+naturesrems
+hannah_graber_
+holisticsecretsbyeleni
+mother.satori
+naturalremss_
+wellnesstipsandhacks
+naturethecure
+jonas_beiler_
+wellness.yagi
+fitruvia
+nikkolaiantonov
+garrisonwhitaker
+nina_yoder_33
+longlifegia
+shen.healings_
+abram_stoltzfus
+
+# Group 2 — Dogs & Pets
+miamidogdaddy
+aussie.dogdad
+dog.guy.peter
+everythingdogtalk
+happdogdad_
+daviddogdaddy
+pure.paws.health
+dogfather.official
+dr.morgan_dog_care
+thecaninecoach9
+sallythedogmom
+furever_healthy
+marcu.sk9
+farmerpaws
+pupswithpaul
+healthy.pet.world

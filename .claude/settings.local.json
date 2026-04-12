@@ -1,0 +1,40 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(tzutil /g)",
+      "Bash(py --version)",
+      "Bash(where python3:*)",
+      "Bash(where py:*)",
+      "Bash(python3 scrape_reels.py --backfill)",
+      "Bash(py -3 --version)",
+      "Read(//c/Users/CC/AppData/Local/Programs/**)",
+      "Bash(cmd /c \"where /r C:\\\\Users\\\\CC python.exe 2>&1 | head -5\")",
+      "Bash(cmd /c \"where /r C:\\\\ProgramData python.exe 2>&1 | head -3\")",
+      "Bash(cmd /c \"where /r \\\\\"C:\\\\Program Files\\\\\" python.exe 2>&1 | head -3\")",
+      "Bash(cmd /c \"where /r C:\\\\Users\\\\CC python.exe\")",
+      "Bash(cmd /c \"where /r \\\\\"C:\\\\Users\\\\CC\\\\\" python.exe 2>&1\")",
+      "Bash(powershell -Command \"Get-Command python,python3,py -ErrorAction SilentlyContinue | Select-Object Name,Source\")",
+      "Bash(powershell -Command 'Get-ChildItem -Path '\\\\''C:\\\\'\\\\'' -Recurse -Filter '\\\\''python.exe'\\\\'' -ErrorAction SilentlyContinue | Where-Object { $_.FullName -notlike '\\\\''*WindowsApps*'\\\\'' } | Select-Object FullName -First 5')",
+      "Bash(powershell -Command \"& 'C:\\\\Users\\\\CC\\\\AppData\\\\Local\\\\Python\\\\bin\\\\python.exe' --version\")",
+      "Bash(powershell -Command \"& 'C:\\\\Users\\\\CC\\\\AppData\\\\Local\\\\Python\\\\bin\\\\python.exe' -m yt_dlp --version\")",
+      "Bash(powershell -Command \"& 'C:\\\\Users\\\\CC\\\\AppData\\\\Local\\\\Python\\\\bin\\\\python.exe' -m pip install yt-dlp\")",
+      "Bash(powershell -Command \"& 'C:\\\\Users\\\\CC\\\\AppData\\\\Local\\\\Python\\\\bin\\\\python.exe' scrape_reels.py --backfill\")",
+      "Bash(\"C:/Users/CC/AppData/Local/Python/bin/python.exe\" scrape_reels.py --backfill)",
+      "Bash(\"C:/Users/CC/AppData/Local/Python/bin/python.exe\" -m yt_dlp --cookies cookies.txt --flat-playlist --dump-single-json \"https://www.instagram.com/miamidogdaddy/\")",
+      "Bash(\"C:/Users/CC/AppData/Local/Python/bin/python.exe\" -m yt_dlp -U)",
+      "Bash(\"C:/Users/CC/AppData/Local/Python/bin/python.exe\" -m pip install instaloader)",
+      "Bash(\"C:/Users/CC/AppData/Local/Python/bin/python.exe\" scrape_reels.py --login)",
+      "mcp__Claude_Preview__preview_start",
+      "Bash(C:/Users/CC/AppData/Local/Python/bin/python.exe -c ':*)",
+      "Bash(\"C:/Users/CC/AppData/Local/Python/bin/python.exe\" -m pip install python-dotenv)",
+      "Bash(crontab -l)",
+      "Bash(schtasks /create /tn \"DailyViralScraper\" /tr \"\\\\\"C:\\\\Users\\\\CC\\\\AppData\\\\Local\\\\Python\\\\bin\\\\python.exe\\\\\" \\\\\"C:\\\\Users\\\\CC\\\\Documents\\\\Daily Viral \\(Scrapper\\)\\\\scrape_reels.py\\\\\"\" /sc daily /st 08:00 /f)",
+      "Bash(powershell -Command \"schtasks /create /tn 'DailyViralScraper' /tr '\\\\\"C:\\\\Users\\\\CC\\\\AppData\\\\Local\\\\Python\\\\bin\\\\python.exe\\\\\" \\\\\"C:\\\\Users\\\\CC\\\\Documents\\\\Daily Viral \\(Scrapper\\)\\\\scrape_reels.py\\\\\"' /sc daily /st 08:00 /f\")",
+      "Bash(powershell -Command ':*)",
+      "Bash(powershell -Command \"Get-ScheduledTask -TaskName 'DailyViralScraper' | Select-Object TaskName, State; \\(Get-ScheduledTask -TaskName 'DailyViralScraper'\\).Triggers | Select-Object StartBoundary, RepetitionInterval; \\(Get-ScheduledTask -TaskName 'DailyViralScraper'\\).Actions | Select-Object Execute, Arguments, WorkingDirectory\")",
+      "Bash(\"C:/Users/CC/AppData/Local/Python/bin/python.exe\" scrape_reels.py)",
+      "Bash(grep -v \"^$\")",
+      "Bash(python -c ':*)"
+    ]
+  }
+}
