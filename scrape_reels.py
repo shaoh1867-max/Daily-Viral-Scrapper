@@ -167,8 +167,9 @@ def normalise_item(item: dict) -> dict | None:
     discovery endpoint which only returns reels — the media_type field from
     Bright Data doesn't reliably contain the word "video".
     """
-    # Timestamp: prefer 'timestamp', fall back to 'date_posted'
-    ts = item.get("timestamp") or item.get("date_posted") or ""
+    # Timestamp: use date_posted (actual post date); timestamp is Bright Data's
+    # internal scrape time and is always today — do NOT use it as the post date.
+    ts = item.get("date_posted") or ""
     upload_date = parse_timestamp(ts)
     if not upload_date:
         return None
