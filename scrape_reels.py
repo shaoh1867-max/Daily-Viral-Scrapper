@@ -153,13 +153,11 @@ def parse_timestamp(ts: str):
 def normalise_item(item: dict) -> dict | None:
     """
     Convert a raw Bright Data result into our standard record dict.
-    Returns None if the item should be skipped (not a video, bad date, etc.).
+    Returns None if the item should be skipped (bad date, no timestamp, etc.).
+    Note: we don't filter by media_type here because we use the url_all_reels
+    discovery endpoint which only returns reels — the media_type field from
+    Bright Data doesn't reliably contain the word "video".
     """
-    # Detect video: check media_type or type field (case-insensitive)
-    media_type = (item.get("media_type") or item.get("type") or "").lower()
-    if "video" not in media_type:
-        return None
-
     # Timestamp: prefer 'timestamp', fall back to 'date_posted'
     ts = item.get("timestamp") or item.get("date_posted") or ""
     upload_date = parse_timestamp(ts)
