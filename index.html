@@ -225,15 +225,16 @@
     document.getElementById("msg").innerHTML = "";
 
     const rows = entry.reels.map((r, i) => {
-      const title = (r.caption || "").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-      const acct  = (r.ownerUsername || "").replace(/</g, "&lt;");
-      const url   = r.url || "#";
+      const caption = (r.caption || "").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+      const acct    = (r.ownerUsername || "").replace(/</g, "&lt;");
+      const url     = r.url || "#";
       return `
         <tr>
           <td class="rank">${i + 1}</td>
           <td class="account"><a href="https://www.instagram.com/${encodeURIComponent(r.ownerUsername || "")}/reels/" target="_blank" rel="noopener">@${acct}</a></td>
-          <td class="title"><span>${title || "<em style='color:#555'>No caption</em>"}</span></td>
+          <td class="title"><span>${caption || "<em style='color:#555'>No caption</em>"}</span></td>
           <td class="num-cell views">${fmt(r.videoViewCount)}</td>
+          <td class="num-cell">${fmt(r.commentsCount)}</td>
           <td class="num-cell">${fmt(r.likesCount)}</td>
           <td class="link-cell"><a href="${url}" target="_blank" rel="noopener" title="Open reel">&#8599;</a></td>
         </tr>`;
@@ -245,8 +246,9 @@
           <tr>
             <th class="num">#</th>
             <th>Account</th>
-            <th>Title</th>
+            <th>Caption</th>
             <th class="right">Views</th>
+            <th class="right">Comments</th>
             <th class="right">Likes</th>
             <th class="right">Link</th>
           </tr>

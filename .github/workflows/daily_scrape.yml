@@ -32,7 +32,7 @@ jobs:
 
       - name: Run scraper
         env:
-          BRIGHTDATA_TOKEN: ${{ secrets.BRIGHTDATA_TOKEN }}
+          APIFY_TOKEN: ${{ secrets.APIFY_TOKEN }}
           NETLIFY_TOKEN: ${{ secrets.NETLIFY_TOKEN }}
           NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
         run: |

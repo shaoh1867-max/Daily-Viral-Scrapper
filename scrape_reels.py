@@ -1,26 +1,25 @@
 #!/usr/bin/env python3
 """
-Instagram Reels scraper using the Bright Data Web Scraper API.
+Instagram Reels scraper using the Apify Instagram API Scraper.
 
 Setup — add to .env in this folder:
-  BRIGHTDATA_TOKEN=your-brightdata-api-token
+  APIFY_TOKEN=your-apify-api-token
   NETLIFY_SITE_ID=your-site-id
-  NETLIFY_TOKEN=your-personal-access-token
+  NETLIFY_TOKEN=your-netlify-personal-access-token
 
 Normal mode (cron):   python scrape_reels.py
-  → runs Bright Data scrape for today's posts, appends to reels_history.json, redeploys Netlify
+  → runs Apify scrape for today's posts, appends to reels_history.json, redeploys Netlify
 
 Backfill mode (once): python scrape_reels.py --backfill
-  → runs Bright Data scrape for last 30 days, organises by date, merges into reels_history.json, redeploys Netlify
+  → runs Apify scrape for last 30 days, organises by date, merges into reels_history.json, redeploys Netlify
 
 Dry-run mode (local): python scrape_reels.py --dry-run
-  → skips all Bright Data API calls; loads raw items from test_data.json (if present) instead
+  → skips all Apify API calls; loads raw items from test_data.json (if present) instead
   → still filters, ranks, writes reels_history.json, and deploys to Netlify as normal
   → combine with --backfill for a free end-to-end test: python scrape_reels.py --backfill --dry-run
 """
 
 import hashlib
-import io
 import json
 import os
 import shutil
@@ -36,21 +35,21 @@ import requests
 from dotenv import load_dotenv
 
 # ── Config ────────────────────────────────────────────────────────────────────
-SCRIPT_DIR      = os.path.dirname(os.path.abspath(__file__))
-HISTORY_FILE    = os.path.join(SCRIPT_DIR, "reels_history.json")
-NETLIFY_DIR     = os.path.join(SCRIPT_DIR, "netlify-deploy")
+SCRIPT_DIR   = os.path.dirname(os.path.abspath(__file__))
+HISTORY_FILE = os.path.join(SCRIPT_DIR, "reels_history.json")
+NETLIFY_DIR  = os.path.join(SCRIPT_DIR, "netlify-deploy")
 
 # Load .env if present (local dev). In GitHub Actions the secrets are already
 # injected as environment variables, so a missing .env file is fine.
 load_dotenv(os.path.join(SCRIPT_DIR, ".env"), override=False)
-BRIGHTDATA_TOKEN      = os.getenv("BRIGHTDATA_TOKEN", "")
-NETLIFY_TOKEN         = os.getenv("NETLIFY_TOKEN", "")
-NETLIFY_SITE_ID       = os.getenv("NETLIFY_SITE_ID", "")
+APIFY_TOKEN   = os.getenv("APIFY_TOKEN", "")
+NETLIFY_TOKEN = os.getenv("NETLIFY_TOKEN", "")
+NETLIFY_SITE_ID = os.getenv("NETLIFY_SITE_ID", "")
 
-BRIGHTDATA_DATASET_ID = "gd_lyclm20il4r5helnj"
-BRIGHTDATA_BASE       = "https://api.brightdata.com/datasets/v3"
-POLL_INTERVAL         = 15        # seconds between snapshot-status checks
-MAX_WAIT              = 45 * 60   # 45 minutes — give up if snapshot never becomes ready
+APIFY_ACTOR   = "apify~instagram-api-scraper"
+APIFY_BASE    = "https://api.apify.com/v2"
+POLL_INTERVAL = 15       # seconds between run-status checks
+MAX_WAIT      = 45 * 60  # 45 minutes — give up if run never finishes
 
 TODAY         = datetime.now(timezone.utc).date()
 YESTERDAY     = TODAY - timedelta(days=1)
@@ -83,69 +82,49 @@ ACCOUNTS     = load_accounts()
 ACCOUNT_URLS = [f"https://www.instagram.com/{a}/" for a in ACCOUNTS]
 
 
-# ── Bright Data API helpers ───────────────────────────────────────────────────
-def bd_headers(content_type: str = "application/json") -> dict:
-    if not BRIGHTDATA_TOKEN:
-        print("ERROR: BRIGHTDATA_TOKEN not set. Add it to your .env file.")
+# ── Apify API helpers ─────────────────────────────────────────────────────────
+def start_apify_run(payload: dict) -> str:
+    """Trigger an Apify actor run and return the run ID."""
+    if not APIFY_TOKEN:
+        print("ERROR: APIFY_TOKEN not set. Add it to your .env file.")
         sys.exit(1)
-    return {"Authorization": f"Bearer {BRIGHTDATA_TOKEN}", "Content-Type": content_type}
-
-
-def start_snapshot(payload: list[dict]) -> str:
-    """Trigger a Bright Data scrape and return the snapshot_id."""
-    url = (
-        f"{BRIGHTDATA_BASE}/scrape"
-        f"?dataset_id={BRIGHTDATA_DATASET_ID}"
-        f"&notify=false&include_errors=true&type=discover_new&discover_by=url_all_reels"
-    )
-    resp = requests.post(url, headers=bd_headers(), json=payload, timeout=120)
+    url = f"{APIFY_BASE}/acts/{APIFY_ACTOR}/runs?token={APIFY_TOKEN}"
+    resp = requests.post(url, json=payload, timeout=120)
     resp.raise_for_status()
-    return resp.json()["snapshot_id"]
+    return resp.json()["data"]["id"]
 
 
-def wait_for_snapshot(snapshot_id: str) -> None:
-    """Poll until the snapshot status is 'ready', with a 45-minute hard timeout.
-    If the API returns a list instead of a status dict, the snapshot is already
-    complete — treat it as ready immediately.
-    """
-    url = f"{BRIGHTDATA_BASE}/snapshot/{snapshot_id}?format=json"
-    print(f"  Waiting for Bright Data snapshot {snapshot_id}", end="", flush=True)
+def wait_for_run(run_id: str) -> None:
+    """Poll until the Apify run status is SUCCEEDED, with a 45-minute hard timeout."""
+    url = f"{APIFY_BASE}/actor-runs/{run_id}?token={APIFY_TOKEN}"
+    print(f"  Waiting for Apify run {run_id}", end="", flush=True)
     elapsed = 0
     while True:
-        resp = requests.get(url, headers=bd_headers(), timeout=120)
+        resp = requests.get(url, timeout=120)
         resp.raise_for_status()
-        data = resp.json()
-        # Bright Data sometimes returns the results list directly when the
-        # snapshot is already complete rather than {"status": "ready"}.
-        if isinstance(data, list):
-            print("  ready (results returned directly)")
+        status = resp.json()["data"]["status"]
+        if status == "SUCCEEDED":
+            print("  done")
             return
-        status = data.get("status", "")
-        if status == "ready":
-            print("  ready")
-            return
-        if status in ("failed", "error"):
-            print(f"\n  [ERROR] Snapshot ended with status: {status}")
-            raise RuntimeError(f"Bright Data snapshot failed: {status}")
+        if status in ("FAILED", "ABORTED", "TIMED-OUT"):
+            print(f"\n  [ERROR] Apify run ended with status: {status}")
+            raise RuntimeError(f"Apify run failed: {status}")
         # Log actual status each poll so hangs are visible in the logs
         print(f" [{status}]", end="", flush=True)
         if elapsed >= MAX_WAIT:
             raise RuntimeError(
-                f"Bright Data snapshot {snapshot_id} still '{status}' after "
-                f"{elapsed // 60}m — giving up."
+                f"Apify run {run_id} still '{status}' after {elapsed // 60}m — giving up."
             )
         time.sleep(POLL_INTERVAL)
         elapsed += POLL_INTERVAL
 
 
-def fetch_snapshot(snapshot_id: str) -> list[dict]:
-    """Download the completed snapshot results."""
-    url = f"{BRIGHTDATA_BASE}/snapshot/{snapshot_id}?format=json"
-    resp = requests.get(url, headers=bd_headers(), timeout=120)
+def fetch_run_results(run_id: str) -> list[dict]:
+    """Download the completed run's dataset items."""
+    url = f"{APIFY_BASE}/actor-runs/{run_id}/dataset/items?token={APIFY_TOKEN}"
+    resp = requests.get(url, timeout=120)
     resp.raise_for_status()
-    data = resp.json()
-    # Results may be wrapped in a list or returned directly
-    return data if isinstance(data, list) else data.get("results", [])
+    return resp.json()
 
 
 # ── Data processing ───────────────────────────────────────────────────────────
@@ -161,61 +140,48 @@ def parse_timestamp(ts: str):
 
 def normalise_item(item: dict) -> dict | None:
     """
-    Convert a raw Bright Data result into our standard record dict.
+    Convert a raw Apify result into our standard record dict.
     Returns None if the item should be skipped (bad date, no timestamp, etc.).
-    Note: we don't filter by media_type here because we use the url_all_reels
-    discovery endpoint which only returns reels — the media_type field from
-    Bright Data doesn't reliably contain the word "video".
     """
-    # Timestamp: use date_posted (actual post date); timestamp is Bright Data's
-    # internal scrape time and is always today — do NOT use it as the post date.
-    ts = item.get("date_posted") or ""
+    ts = item.get("timestamp") or ""
     upload_date = parse_timestamp(ts)
     if not upload_date:
         return None
 
-    # Username: Bright Data returns 'user_posted'; keep others as fallback
-    owner = (
-        item.get("user_posted")
-        or item.get("owner_username")
-        or item.get("ownerUsername")
-        or item.get("profile_url", "").rstrip("/").rsplit("/", 1)[-1]
-        or ""
-    )
-
-    caption_raw = item.get("description") or item.get("caption") or ""
+    caption_raw = item.get("caption") or ""
     caption = caption_raw.split("\n")[0][:120].strip() or "[No caption]"
 
     return {
-        "ownerUsername":  owner,
+        "ownerUsername":  item.get("ownerUsername") or "",
         "caption":        caption,
         "url":            item.get("url") or "",
-        "videoViewCount": (item.get("views") or item.get("video_play_count")
-                           or item.get("video_view_count") or item.get("plays")
-                           or item.get("videoViewCount") or 0),
-        "likesCount":     item.get("likes") or item.get("likesCount") or 0,
-        "commentsCount":  (item.get("num_comments") or item.get("comments")
-                           or item.get("commentsCount") or 0),
+        "videoViewCount": item.get("videoViewCount") or 0,
+        "likesCount":     item.get("likesCount") or 0,
+        "commentsCount":  item.get("commentsCount") or 0,
         "timestamp":      ts,
-        "displayUrl":     item.get("image_url") or item.get("thumbnail") or item.get("displayUrl") or "",
+        "displayUrl":     item.get("displayUrl") or "",
         "upload_date":    upload_date.isoformat(),
     }
 
 
-def run_brightdata_scrape(since_date, results_limit: int) -> list[dict]:
+def run_apify_scrape(since_date, results_limit: int, newer_than: str) -> list[dict]:
     """
-    Run the Bright Data scrape for all accounts and return normalised, filtered items.
-    since_date: date object — only keep posts on or after this date (and before today).
+    Run the Apify scrape for all accounts and return normalised, filtered items.
+    since_date:    date object — only keep posts on or after this date
+    results_limit: max posts per account to request from Apify
+    newer_than:    Apify server-side pre-filter ("1 day" or "YYYY-MM-DD")
     """
-    payload = [
-        {"url": url, "num_of_posts": results_limit}
-        for url in ACCOUNT_URLS
-    ]
+    payload = {
+        "directUrls":   ACCOUNT_URLS,
+        "resultsType":  "posts",
+        "resultsLimit": results_limit,
+        "newerThan":    newer_than,
+    }
 
-    print(f"  Dataset        : {BRIGHTDATA_DATASET_ID}")
+    print(f"  Actor          : {APIFY_ACTOR}")
     print(f"  Accounts       : {len(ACCOUNT_URLS)}")
     print(f"  Posts per acct : {results_limit}")
-    print(f"  Newer than     : {since_date.isoformat()}")
+    print(f"  Newer than     : {newer_than}")
 
     if DRY_RUN:
         test_path = os.path.join(SCRIPT_DIR, "test_data.json")
@@ -227,14 +193,14 @@ def run_brightdata_scrape(since_date, results_limit: int) -> list[dict]:
             print("  [DRY RUN] test_data.json not found — using empty dataset")
             raw_items = []
     else:
-        print(f"  Starting Bright Data scrape...")
-        snapshot_id = start_snapshot(payload)
-        wait_for_snapshot(snapshot_id)
-        print(f"  Downloading snapshot {snapshot_id}...")
-        raw_items = fetch_snapshot(snapshot_id)
+        print("  Starting Apify run...")
+        run_id = start_apify_run(payload)
+        wait_for_run(run_id)
+        print(f"  Fetching results for run {run_id}...")
+        raw_items = fetch_run_results(run_id)
         print(f"  Raw items returned: {len(raw_items)}")
 
-    # Normalise, filter to videos, filter to date window, exclude today
+    # Normalise and filter to date window
     results = []
     for item in raw_items:
         record = normalise_item(item)
@@ -298,7 +264,7 @@ def print_ranked(reels: list[dict], heading: str) -> None:
     print(f"\n{'='*80}\n")
 
 
-# ── Netlify deploy ───────────────────────────────────────────────────────────
+# ── Netlify deploy ────────────────────────────────────────────────────────────
 def _sha1(path: str) -> str:
     """Return the hex SHA1 digest of a file — used by Netlify's file-based deploy API."""
     h = hashlib.sha1()
@@ -391,7 +357,7 @@ def main_normal() -> None:
     print(f"Instagram Reels Scraper — {TODAY.isoformat()}")
     print(f"Fetching video posts from today ({TODAY.isoformat()})...\n")
 
-    reels = run_brightdata_scrape(since_date=TODAY, results_limit=30)
+    reels = run_apify_scrape(since_date=TODAY, results_limit=10, newer_than="1 day")
     reels.sort(key=lambda r: r["videoViewCount"], reverse=True)
 
     print_ranked(reels, f"RANKED REELS — Today ({TODAY.isoformat()})")
@@ -415,10 +381,9 @@ def main_backfill() -> None:
     """One-time backfill — scrape last 30 days, organise by date."""
     cutoff = TODAY - timedelta(days=BACKFILL_DAYS)
     print(f"Instagram Reels Scraper — BACKFILL MODE")
-    print(f"Fetching video posts from {cutoff.isoformat()} to {YESTERDAY.isoformat()}...\n")
+    print(f"Fetching video posts from {cutoff.isoformat()} to {TODAY.isoformat()}...\n")
 
-    # Higher results limit per account so we catch all posts over 30 days
-    reels = run_brightdata_scrape(since_date=cutoff, results_limit=100)
+    reels = run_apify_scrape(since_date=cutoff, results_limit=50, newer_than=cutoff.isoformat())
 
     # Group by date, sort each day by videoViewCount
     by_date: dict[str, list[dict]] = {}
