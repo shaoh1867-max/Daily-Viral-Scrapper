@@ -3,7 +3,16 @@ name: Daily Reels Scraper
 on:
   schedule:
     - cron: "0 20 * * *"  # 8pm UTC = 8am NZT (UTC+12)
-  workflow_dispatch:        # also triggerable manually from the Actions tab
+  workflow_dispatch:        # manually triggerable from the Actions tab
+    inputs:
+      mode:
+        description: "Scrape mode"
+        required: false
+        default: "normal"
+        type: choice
+        options:
+          - normal
+          - backfill
 
 jobs:
   scrape:
@@ -26,4 +35,9 @@ jobs:
           BRIGHTDATA_TOKEN: ${{ secrets.BRIGHTDATA_TOKEN }}
           NETLIFY_TOKEN: ${{ secrets.NETLIFY_TOKEN }}
           NETLIFY_SITE_ID: ${{ secrets.NETLIFY_SITE_ID }}
-        run: python scrape_reels.py
+        run: |
+          if [ "${{ github.event.inputs.mode }}" = "backfill" ]; then
+            python scrape_reels.py --backfill
+          else
+            python scrape_reels.py
+          fi
