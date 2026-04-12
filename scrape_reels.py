@@ -205,7 +205,7 @@ def run_brightdata_scrape(since_date, results_limit: int) -> list[dict]:
         if record is None:
             continue
         upload_date_obj = datetime.strptime(record["upload_date"], "%Y-%m-%d").date()
-        if upload_date_obj < since_date or upload_date_obj >= TODAY:
+        if upload_date_obj < since_date or upload_date_obj > TODAY:
             continue
         results.append(record)
 
@@ -351,24 +351,24 @@ def deploy_to_netlify() -> None:
 
 # ── Modes ─────────────────────────────────────────────────────────────────────
 def main_normal() -> None:
-    """Daily cron mode — scrape yesterday's posts only."""
+    """Daily cron mode — scrape today's posts only."""
     print(f"Instagram Reels Scraper — {TODAY.isoformat()}")
-    print(f"Fetching video posts from yesterday ({YESTERDAY.isoformat()})...\n")
+    print(f"Fetching video posts from today ({TODAY.isoformat()})...\n")
 
-    reels = run_brightdata_scrape(since_date=YESTERDAY, results_limit=30)
+    reels = run_brightdata_scrape(since_date=TODAY, results_limit=30)
     reels.sort(key=lambda r: r["videoViewCount"], reverse=True)
 
-    print_ranked(reels, f"RANKED REELS — Yesterday ({YESTERDAY.isoformat()})")
+    print_ranked(reels, f"RANKED REELS — Today ({TODAY.isoformat()})")
 
-    snapshot = os.path.join(SCRIPT_DIR, f"reels_{YESTERDAY.isoformat()}.json")
+    snapshot = os.path.join(SCRIPT_DIR, f"reels_{TODAY.isoformat()}.json")
     with open(snapshot, "w", encoding="utf-8") as f:
         json.dump({"scraped_at": datetime.now(timezone.utc).isoformat(),
-                   "date": YESTERDAY.isoformat(), "total_reels": len(reels),
+                   "date": TODAY.isoformat(), "total_reels": len(reels),
                    "reels": reels}, f, indent=2, ensure_ascii=False)
     print(f"Dated snapshot saved to : {snapshot}")
 
     history = load_history()
-    upsert_day(history, YESTERDAY.isoformat(), reels)
+    upsert_day(history, TODAY.isoformat(), reels)
     save_history(history)
     print(f"History updated         : {HISTORY_FILE}")
 
