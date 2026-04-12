@@ -130,11 +130,34 @@
       color: #c0c0ff;
       white-space: nowrap;
     }
-    td.account a {
-      color: inherit;
+    td.account .acct-name {
+      cursor: pointer;
+      color: #c0c0ff;
       text-decoration: none;
     }
-    td.account a:hover { text-decoration: underline; }
+    td.account .acct-name:hover { text-decoration: underline; color: #fff; }
+    td.account .acct-link {
+      margin-left: 6px;
+      color: #444;
+      font-size: 0.75rem;
+      text-decoration: none;
+      vertical-align: middle;
+    }
+    td.account .acct-link:hover { color: #888; }
+
+    /* ── Back button ── */
+    .back-btn {
+      background: #1a1a1e;
+      border: 1px solid #2e2e35;
+      border-radius: 8px;
+      padding: 7px 14px;
+      color: #aaa;
+      font-size: 0.85rem;
+      cursor: pointer;
+      transition: border-color 0.15s, color 0.15s;
+    }
+    .back-btn:hover { border-color: #5865f2; color: #fff; }
+    .acct-heading { font-weight: 600; color: #c0c0ff; font-size: 0.95rem; }
 
     td.title {
       color: #d0d0d0;
@@ -195,6 +218,12 @@
   <div class="badge" id="totalBadge">— reels</div>
 </div>
 
+<div class="controls" id="accountControls" style="display:none">
+  <button class="back-btn" onclick="clearAccountFilter()">&#8592; All dates</button>
+  <span class="acct-heading" id="accountTitle"></span>
+  <div class="badge" id="accountBadge">— posts</div>
+</div>
+
 <div class="table-wrap" id="tableWrap"></div>
 <div class="msg" id="msg">Loading...</div>
 
@@ -211,11 +240,13 @@
 
   /* ── helpers ── */
   const fmt = n => (n == null || n === 0) ? "—" : Number(n).toLocaleString();
+  const esc = s => (s || "").replace(/</g, "&lt;").replace(/>/g, "&gt;");
 
+  /* ── date view ── */
   function renderTable(entry) {
     const wrap = document.getElementById("tableWrap");
-    const badge = document.getElementById("totalBadge");
-    badge.innerHTML = `<span>${entry.reels.length}</span> reel${entry.reels.length !== 1 ? "s" : ""}`;
+    document.getElementById("totalBadge").innerHTML =
+      `<span>${entry.reels.length}</span> reel${entry.reels.length !== 1 ? "s" : ""}`;
 
     if (!entry.reels.length) {
       wrap.innerHTML = "";
@@ -225,36 +256,98 @@
     document.getElementById("msg").innerHTML = "";
 
     const rows = entry.reels.map((r, i) => {
-      const caption = (r.caption || "").replace(/</g, "&lt;").replace(/>/g, "&gt;");
-      const acct    = (r.ownerUsername || "").replace(/</g, "&lt;");
-      const url     = r.url || "#";
+      const acct = esc(r.ownerUsername);
+      const igUrl = `https://www.instagram.com/${encodeURIComponent(r.ownerUsername || "")}/reels/`;
       return `
         <tr>
           <td class="rank">${i + 1}</td>
-          <td class="account"><a href="https://www.instagram.com/${encodeURIComponent(r.ownerUsername || "")}/reels/" target="_blank" rel="noopener">@${acct}</a></td>
-          <td class="title"><span>${caption || "<em style='color:#555'>No caption</em>"}</span></td>
+          <td class="account">
+            <span class="acct-name" onclick="filterByAccount('${esc(r.ownerUsername)}')">@${acct}</span>
+            <a class="acct-link" href="${igUrl}" target="_blank" rel="noopener" title="Open profile">&#8599;</a>
+          </td>
+          <td class="title"><span>${esc(r.caption) || "<em style='color:#555'>No caption</em>"}</span></td>
           <td class="num-cell views">${fmt(r.videoViewCount)}</td>
           <td class="num-cell">${fmt(r.commentsCount)}</td>
           <td class="num-cell">${fmt(r.likesCount)}</td>
-          <td class="link-cell"><a href="${url}" target="_blank" rel="noopener" title="Open reel">&#8599;</a></td>
+          <td class="link-cell"><a href="${r.url || "#"}" target="_blank" rel="noopener" title="Open reel">&#8599;</a></td>
         </tr>`;
     }).join("");
 
     wrap.innerHTML = `
       <table>
-        <thead>
-          <tr>
-            <th class="num">#</th>
-            <th>Account</th>
-            <th>Caption</th>
-            <th class="right">Views</th>
-            <th class="right">Comments</th>
-            <th class="right">Likes</th>
-            <th class="right">Link</th>
-          </tr>
-        </thead>
+        <thead><tr>
+          <th class="num">#</th>
+          <th>Account</th>
+          <th>Caption</th>
+          <th class="right">Views</th>
+          <th class="right">Comments</th>
+          <th class="right">Likes</th>
+          <th class="right">Link</th>
+        </tr></thead>
         <tbody>${rows}</tbody>
       </table>`;
+  }
+
+  /* ── account filter view ── */
+  function filterByAccount(username) {
+    const allReels = [];
+    history.forEach(entry => {
+      entry.reels.forEach(r => {
+        if ((r.ownerUsername || "") === username) allReels.push(r);
+      });
+    });
+    allReels.sort((a, b) => (b.upload_date || "").localeCompare(a.upload_date || ""));
+
+    document.getElementById("controls").style.display = "none";
+    document.getElementById("accountControls").style.display = "flex";
+    document.getElementById("accountTitle").textContent = `@${username}`;
+    document.getElementById("accountBadge").innerHTML =
+      `<span>${allReels.length}</span> post${allReels.length !== 1 ? "s" : ""}`;
+    document.getElementById("msg").innerHTML = "";
+
+    if (!allReels.length) {
+      document.getElementById("tableWrap").innerHTML = "";
+      document.getElementById("msg").innerHTML = `<strong>No posts found</strong> for @${esc(username)}.`;
+      return;
+    }
+
+    const igUrl = `https://www.instagram.com/${encodeURIComponent(username)}/reels/`;
+    const rows = allReels.map(r => {
+      const d = r.upload_date
+        ? new Date(r.upload_date + "T00:00:00").toLocaleDateString("en-NZ",
+            { day: "numeric", month: "short", year: "numeric" })
+        : "—";
+      return `
+        <tr>
+          <td class="num-cell" style="text-align:left;color:#666;white-space:nowrap">${d}</td>
+          <td class="title"><span>${esc(r.caption) || "<em style='color:#555'>No caption</em>"}</span></td>
+          <td class="num-cell views">${fmt(r.videoViewCount)}</td>
+          <td class="num-cell">${fmt(r.commentsCount)}</td>
+          <td class="num-cell">${fmt(r.likesCount)}</td>
+          <td class="link-cell"><a href="${r.url || "#"}" target="_blank" rel="noopener" title="Open reel">&#8599;</a></td>
+        </tr>`;
+    }).join("");
+
+    document.getElementById("tableWrap").innerHTML = `
+      <table>
+        <thead><tr>
+          <th>Date Posted</th>
+          <th>Caption</th>
+          <th class="right">Views</th>
+          <th class="right">Comments</th>
+          <th class="right">Likes</th>
+          <th class="right">Link</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+  }
+
+  function clearAccountFilter() {
+    document.getElementById("accountControls").style.display = "none";
+    document.getElementById("controls").style.display = "flex";
+    const picker = document.getElementById("datePicker");
+    const entry = history.find(h => h.date === picker.value);
+    if (entry) renderTable(entry);
   }
 
   function populatePicker(historyData) {
