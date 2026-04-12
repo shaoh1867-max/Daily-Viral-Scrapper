@@ -62,6 +62,7 @@ jobs:
 
           git checkout main -- index.html
 
-          git add index.html reels_history.json
+          git add index.html
+          git add -f reels_history.json
           git diff --cached --quiet || git commit -m "Update reels data $(date -u +%Y-%m-%d)"
           git push origin gh-pages
