@@ -91,7 +91,7 @@ def start_snapshot(payload: list[dict]) -> str:
         f"?dataset_id={BRIGHTDATA_DATASET_ID}"
         f"&notify=false&include_errors=true&type=discover_new&discover_by=url_all_reels"
     )
-    resp = requests.post(url, headers=bd_headers(), json=payload, timeout=30)
+    resp = requests.post(url, headers=bd_headers(), json=payload, timeout=120)
     resp.raise_for_status()
     return resp.json()["snapshot_id"]
 
@@ -101,7 +101,7 @@ def wait_for_snapshot(snapshot_id: str) -> None:
     url = f"{BRIGHTDATA_BASE}/snapshot/{snapshot_id}?format=json"
     print(f"  Waiting for Bright Data snapshot {snapshot_id}", end="", flush=True)
     while True:
-        resp = requests.get(url, headers=bd_headers(), timeout=30)
+        resp = requests.get(url, headers=bd_headers(), timeout=120)
         resp.raise_for_status()
         status = resp.json().get("status", "")
         if status == "ready":
@@ -305,7 +305,7 @@ def deploy_to_netlify() -> None:
         f"{netlify_base}/sites/{NETLIFY_SITE_ID}/deploys",
         headers=headers,
         json={"files": deploy_files},
-        timeout=30,
+        timeout=120,
     )
     resp.raise_for_status()
     deploy = resp.json()
@@ -334,7 +334,7 @@ def deploy_to_netlify() -> None:
     # 5. Poll until the deploy is live
     print("  Waiting for deploy to go live", end="", flush=True)
     while True:
-        status_resp = requests.get(f"{netlify_base}/deploys/{deploy_id}", headers=headers, timeout=30)
+        status_resp = requests.get(f"{netlify_base}/deploys/{deploy_id}", headers=headers, timeout=120)
         status_resp.raise_for_status()
         state = status_resp.json().get("state", "")
         if state == "ready":
