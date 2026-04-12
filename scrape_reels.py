@@ -173,9 +173,10 @@ def normalise_item(item: dict) -> dict | None:
     if not upload_date:
         return None
 
-    # Username: prefer 'owner_username', fall back to 'profile_url' slug
+    # Username: Bright Data returns 'user_posted'; keep others as fallback
     owner = (
-        item.get("owner_username")
+        item.get("user_posted")
+        or item.get("owner_username")
         or item.get("ownerUsername")
         or item.get("profile_url", "").rstrip("/").rsplit("/", 1)[-1]
         or ""
@@ -188,9 +189,12 @@ def normalise_item(item: dict) -> dict | None:
         "ownerUsername":  owner,
         "caption":        caption,
         "url":            item.get("url") or "",
-        "videoViewCount": item.get("video_view_count") or item.get("plays") or item.get("videoViewCount") or 0,
+        "videoViewCount": (item.get("views") or item.get("video_play_count")
+                           or item.get("video_view_count") or item.get("plays")
+                           or item.get("videoViewCount") or 0),
         "likesCount":     item.get("likes") or item.get("likesCount") or 0,
-        "commentsCount":  item.get("comments") or item.get("commentsCount") or 0,
+        "commentsCount":  (item.get("num_comments") or item.get("comments")
+                           or item.get("commentsCount") or 0),
         "timestamp":      ts,
         "displayUrl":     item.get("image_url") or item.get("thumbnail") or item.get("displayUrl") or "",
         "upload_date":    upload_date.isoformat(),
