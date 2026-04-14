@@ -58,7 +58,14 @@ jobs:
           git config user.email "github-actions[bot]@users.noreply.github.com"
 
           git fetch origin gh-pages 2>/dev/null || true
+
+          # Save fresh history before branch switch clobbers it
+          cp reels_history.json /tmp/reels_history_fresh.json
+
           git checkout gh-pages 2>/dev/null || git checkout --orphan gh-pages
+
+          # Restore fresh history (branch switch restored the old gh-pages copy)
+          cp /tmp/reels_history_fresh.json reels_history.json
 
           git checkout main -- index.html
 
