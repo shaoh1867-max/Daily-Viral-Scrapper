@@ -262,7 +262,7 @@ def main_normal() -> None:
     print(f"Instagram Reels Scraper — {TODAY.isoformat()}")
     print(f"Fetching video posts from today ({TODAY.isoformat()})...\n")
 
-    reels = run_apify_scrape(since_date=TODAY, results_limit=10, newer_than="1 day")
+    reels = run_apify_scrape(since_date=TODAY, results_limit=10, newer_than="3 days")
     reels.sort(key=lambda r: r["videoViewCount"], reverse=True)
 
     print_ranked(reels, f"RANKED REELS — Today ({TODAY.isoformat()})")
